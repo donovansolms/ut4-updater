@@ -1,0 +1,5 @@
+InstallPath: /tmp/somepath
+Versioning:
+  Keep: 2
+  Run: latest
+SendStats: true
