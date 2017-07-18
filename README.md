@@ -27,8 +27,23 @@ KeepVersions specifies the clones to keep. **Warning** if set to 0, the updates 
 
 Version allows you to run any previously downloaded version. This is handy in case something is broken or you need to check performance between versions
 
+* `stats` (Defaults to true)
+
+Basic information is collected to improve the updater and display stats about Unreal Tournament players using Linux
+
 ## GUI and CLI Launchers
 
 * CLI Launcher: [ut4-launcher](https://github.com/donovansolms/ut4-launcher)
 
 * GUI Launcher: [ut4-launcher-gui](https://github.com/donovansolms/ut4-launcher)
+
+## Privacy
+
+I respect your privacy. The updater collects the following information to improve the updater:
+
+1. Your installed Unreal Tournament 4 versions
+2. Your public IP is saved by the update server for country install stats
+3. Kernel version and Distribution using `/etc/*-release` and `uname -r`. Only used for stats
+
+You can disable Kernel version, distribution and installed Unreal Tournament version collection
+by setting the `stats` option to `false`.
