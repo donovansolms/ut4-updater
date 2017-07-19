@@ -2,7 +2,10 @@ language: go
 go:
   - 1.8
   - tip
+install:
+  - go get github.com/kardianos/govendor
 script:
+  - govendor sync
   - make
   - make test
   - make clean
