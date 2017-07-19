@@ -1,6 +1,7 @@
 package ut4updater_test
 
 import (
+	"os"
 	"testing"
 
 	"github.com/donovansolms/ut4-updater"
@@ -19,7 +20,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-	m.Run()
+	os.Exit(m.Run())
 }
 
 func TestGetVersionList(t *testing.T) {
