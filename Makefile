@@ -9,14 +9,14 @@ APP_NAME := ut4updater
 default: build
 
 build:
-	go build -o ./bin/${APP_NAME} ./src/ut4updater/ut4updater.go
+	go build -o ./bin/${APP_NAME} ./*.go
 
 # http://golang.org/cmd/go/#hdr-Run_gofmt_on_package_sources
 fmt:
-	go fmt ./src/...
+	go fmt ./...
 
 test:
-	go test ./src/... -v -cover
+	go test ./... -v -cover
 
 clean:
 	rm ./bin/*

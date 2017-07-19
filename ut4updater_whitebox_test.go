@@ -6,7 +6,7 @@ import (
 
 func TestUpdateVersionMap(t *testing.T) {
 	testUpdater, err := New(
-		"../../test-resources/installs",
+		"./test-resources/installs",
 		2,
 		"latest",
 		true,

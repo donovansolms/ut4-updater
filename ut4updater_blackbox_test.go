@@ -3,7 +3,7 @@ package ut4updater_test
 import (
 	"testing"
 
-	"github.com/donovansolms/ut4-updater/src/ut4updater"
+	"github.com/donovansolms/ut4-updater"
 )
 
 var updater *ut4updater.UT4Updater
@@ -11,7 +11,7 @@ var updater *ut4updater.UT4Updater
 func TestMain(m *testing.M) {
 	var err error
 	updater, err = ut4updater.New(
-		"../../test-resources/installs",
+		"./test-resources/installs",
 		2,
 		"latest",
 		true,
