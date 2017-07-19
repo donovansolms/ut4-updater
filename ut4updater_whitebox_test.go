@@ -10,19 +10,16 @@ func TestUpdateVersionMap(t *testing.T) {
 		2,
 		"latest",
 		true,
-		"http://localhost/ut4updater/versionmap.json")
+		"http://update.donovansolms.local")
 	if err != nil {
 		panic(err)
 	}
-	// Test Fail the remote download
-	err = testUpdater.updateVersionMap("httx://localhost/versionmaps.json")
-	if err == nil {
-		t.Error("Invalid version URL must fail")
-	}
 	// Test file the remote download and local cache
+	previousPath := testUpdater.installPath
 	testUpdater.installPath = "/tmp"
 	err = testUpdater.updateVersionMap("httx://localhost/versionmaps.json")
 	if err == nil {
 		t.Error("Invalid version URL and local file must fail")
 	}
+	testUpdater.installPath = previousPath
 }

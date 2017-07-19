@@ -20,3 +20,5 @@ vendor/*
 !vendor/vendor.json
 # Ignore I'm Done TODO tracking
 .imdone
+# UT4 Specific
+.clientid

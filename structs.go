@@ -8,3 +8,11 @@ type OSDistribution struct {
 	DistributionVersion    string
 	DistributionPrettyName string
 }
+
+// UpdateCheckRequest holds the information for update requests
+type UpdateCheckRequest struct {
+	ClientID       string         `json:"client_id"`
+	OS             OSDistribution `json:"os"`
+	Versions       []string       `json:"versions"`
+	CurrentVersion string         `json:"current_version"`
+}

@@ -1,11 +1,13 @@
 package ut4updater
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -13,6 +15,9 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/google/uuid"
+	"github.com/sethgrid/pester"
 )
 
 const (
@@ -25,7 +30,9 @@ type UT4Updater struct {
 	keepVersions uint
 	runVersion   string
 	sendStats    bool
+	updateURL    string
 	versionMaps  VersionMaps
+	clientID     string
 }
 
 // New creates aand initializes a new instance of UT4Updater
@@ -33,12 +40,13 @@ func New(installPath string,
 	keepVersions uint,
 	runVersion string,
 	sendStats bool,
-	versionMapURL string) (*UT4Updater, error) {
+	updateURL string) (*UT4Updater, error) {
 	updater := &UT4Updater{
 		installPath:  installPath,
 		keepVersions: keepVersions,
 		runVersion:   runVersion,
 		sendStats:    sendStats,
+		updateURL:    updateURL,
 	}
 	fullPath, err := filepath.Abs(updater.installPath)
 	if err != nil {
@@ -46,6 +54,11 @@ func New(installPath string,
 	}
 	updater.installPath = fullPath
 
+	versionMapURL := fmt.Sprintf("%s/%s/%s",
+		updateURL,
+		"update",
+		"ut4-versionmap")
+	fmt.Println(versionMapURL)
 	err = updater.updateVersionMap(versionMapURL)
 	if err != nil {
 		return updater,
@@ -53,6 +66,21 @@ func New(installPath string,
 				versionMapURL,
 				err.Error())
 	}
+
+	// On the first run we generate a UUID for this client
+	clientIDPath := filepath.Join(updater.installPath, ".clientid")
+	clientUUID, err := ioutil.ReadFile(clientIDPath)
+	if err != nil {
+		clientUUID, err := uuid.NewRandom()
+		if err != nil {
+			return updater, err
+		}
+		err = ioutil.WriteFile(clientIDPath, []byte(clientUUID.String()), 0644)
+		if err != nil {
+			return updater, err
+		}
+	}
+	updater.clientID = string(clientUUID)
 
 	return updater, nil
 }
@@ -68,7 +96,9 @@ func (updater *UT4Updater) updateVersionMap(versionMapURL string) error {
 		// now we can check if a local copy exists
 		// Declaring localErr to avoid shadowing mapReader
 		var localErr error
-		mapReader, localErr = os.Open(filepath.Join(updater.installPath, "versionmap.json"))
+		mapReader, localErr = os.Open(filepath.Join(
+			updater.installPath,
+			"versionmap.json"))
 		if localErr != nil {
 			return fmt.Errorf("Remote returned '%s' and local copy returned '%s'",
 				err.Error(),
@@ -79,13 +109,27 @@ func (updater *UT4Updater) updateVersionMap(versionMapURL string) error {
 		mapReader = response.Body
 	}
 
+	versionMapBytes, err := ioutil.ReadAll(mapReader)
+	if err != nil {
+		return err
+	}
+
 	var versionMaps VersionMaps
-	err = json.NewDecoder(mapReader).Decode(&versionMaps)
+	err = json.Unmarshal(versionMapBytes, &versionMaps)
 	if err != nil {
 		return err
 	}
 	defer mapReader.Close()
 	updater.versionMaps = versionMaps
+
+	// Write a local cache for the versionmap
+	err = ioutil.WriteFile(filepath.Join(
+		updater.installPath,
+		"versionmap.json"), versionMapBytes, 0644)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -140,11 +184,56 @@ func (updater *UT4Updater) CheckForUpdate() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	osDistribution := updater.GetOSDistribution()
+	osDistribution := OSDistribution{
+		Distribution:           "Optout",
+		DistributionID:         "optout",
+		DistributionPrettyName: "Optout",
+		KernelVersion:          "Linux Optout",
+		DistributionVersion:    "0.0",
+	}
+	var versions []string
+	if updater.sendStats {
+		osDistribution = updater.GetOSDistribution()
+		installedVersions, err := updater.GetVersionList()
+		if err == nil {
+			for _, version := range installedVersions {
+				versions = append(versions, version.Version)
+			}
+		}
+	}
 
-	_ = osDistribution
-	_ = latestVersion
-	return false, nil
+	updateCheckRequest := UpdateCheckRequest{
+		ClientID:       updater.clientID,
+		OS:             osDistribution,
+		Versions:       versions,
+		CurrentVersion: latestVersion.Version,
+	}
+	checkJSON, err := json.Marshal(updateCheckRequest)
+	if err != nil {
+		return false, err
+	}
+
+	client := pester.New()
+	client.Concurrency = 1
+	client.MaxRetries = 3
+	client.Backoff = pester.DefaultBackoff
+	fmt.Println(fmt.Sprintf("%s/%s/%s", updater.updateURL, "update", "ut4-check"))
+	req, err := http.NewRequest("POST",
+		fmt.Sprintf("%s/%s/%s", updater.updateURL, "update", "ut4-check"),
+		bytes.NewReader(checkJSON))
+	if err != nil {
+		return false, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	log.Printf("UpdateStatus %s", resp.Status)
+	content, _ := ioutil.ReadAll(resp.Body)
+	fmt.Println(string(content))
+
+	return true, nil
 }
 
 // Update creates a backup and the current game, determines the files to be

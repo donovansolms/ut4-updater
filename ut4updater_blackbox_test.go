@@ -15,7 +15,7 @@ func TestMain(m *testing.M) {
 		2,
 		"latest",
 		true,
-		"http://localhost/ut4updater/versionmap.json")
+		"http://update.donovansolms.local")
 	if err != nil {
 		panic(err)
 	}
@@ -54,5 +54,15 @@ func TestGetOSDistribution(t *testing.T) {
 	}
 	if osDistribution.KernelVersion == "" {
 		t.Error("KernelVersion must contain something")
+	}
+}
+
+func TestUpdateCheck(t *testing.T) {
+	shouldUpdate, err := updater.CheckForUpdate()
+	if err != nil {
+		t.Error(err.Error())
+	}
+	if shouldUpdate == false {
+		t.Error("UpdateCheck should return true")
 	}
 }
