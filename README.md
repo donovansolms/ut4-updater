@@ -2,7 +2,9 @@
 
 An incremental updater for Unreal Tournament 4 on Linux
 
-**Current State:** Development
+[![Build Status](https://travis-ci.org/donovansolms/ut4-updater.svg?branch=master)](https://travis-ci.org/donovansolms/ut4-updater)
+[![Go Report Card](https://goreportcard.com/badge/github.com/donovansolms/ut4-updater)](https://goreportcard.com/report/github.com/donovansolms/ut4-updater)
+[![Current Version](https://img.shields.io/badge/version-development-orange.svg)](https://img.shields.io/badge/version-development-orange.svg)
 
 ## About
 
@@ -50,4 +52,4 @@ I respect your privacy. The updater collects the following information to improv
 3. Kernel version and Distribution using `/etc/*-release` and `uname -r`. Only used for stats
 
 You can disable Kernel version, distribution and installed Unreal Tournament version collection
-by setting the `stats` option to `false`.
+by setting the `SendStats` option to `false`.
