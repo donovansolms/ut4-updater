@@ -8,8 +8,11 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strings"
 )
 
 const (
@@ -131,4 +134,114 @@ func (updater *UT4Updater) GetVersionList() ([]UT4Version, error) {
 	return versions, nil
 }
 
-//func (updater *UT4Updater) GetVersion(version latest)
+// CheckForUpdate checks if an update is available
+func (updater *UT4Updater) CheckForUpdate() (bool, error) {
+	latestVersion, err := updater.GetLatestVersion()
+	if err != nil {
+		return false, err
+	}
+	osDistribution := updater.GetOSDistribution()
+
+	_ = osDistribution
+	_ = latestVersion
+	return false, nil
+}
+
+// Update creates a backup and the current game, determines the files to be
+// updated, downloads the files and applies the updates. Returns the new latest
+// version.
+// This is safe to run in a goroutine.
+func (updater *UT4Updater) Update() (UT4Version, error) {
+
+	// Generate file list with hashes
+	// Generate JSON  file list with hashes
+	// Generate SHA256 hash for the filelist
+	// Generate update manifest
+	// Submit the update manifest
+	// Clone the current latest version with the new latest version name
+	// Download the updated files (wait for package)
+	// Apply (remove, add, update) the update
+	//
+	return UT4Version{}, nil
+}
+
+// GetOSDistribution retrieves the kernel and distribution versions
+func (updater *UT4Updater) GetOSDistribution() OSDistribution {
+	var osDistribution OSDistribution
+
+	// /etc/os-release is the preferred way to check for distribution,
+	// if it exists, we'll use it, otherwise just check for another *-release
+	// file and user a part of it. This isn't critical to the updater.
+	hasReleaseFile := true
+	releaseBytes, err := ioutil.ReadFile("/etc/os-release")
+	if err != nil {
+		// File doesn't exist, check if the next one does
+		releaseBytes, err = ioutil.ReadFile("/usr/lib/os-release")
+		if err != nil {
+			// still no release file
+			hasReleaseFile = false
+		}
+	}
+	releaseContents := make(map[string]string)
+	if hasReleaseFile {
+		for _, line := range strings.Split(string(releaseBytes), "\n") {
+			parts := strings.Split(line, "=")
+			if len(parts) == 2 {
+				key := strings.TrimSpace(parts[0])
+				value := strings.Replace(strings.TrimSpace(parts[1]), "\"", "", -1)
+				releaseContents[key] = value
+			}
+		}
+	} else {
+		_ = filepath.Walk("/etc",
+			func(path string, f os.FileInfo, _ error) error {
+				if !f.IsDir() {
+					r, walkErr := regexp.MatchString("release", f.Name())
+					if walkErr == nil && r {
+						// This is a lazy way since this is not really important
+						parts := strings.Split(f.Name(), "-")
+						if len(parts) == 2 {
+							releaseContents["ID"] = strings.Title(parts[0])
+							releaseContents["NAME"] = releaseContents["ID"] + " Linux"
+							releaseContents["PRETTY_NAME"] = releaseContents["NAME"]
+						}
+					}
+				}
+				return nil
+			})
+		if len(releaseContents) == 0 {
+			releaseContents["ID"] = "Generic"
+			releaseContents["NAME"] = "Generic Linux"
+			releaseContents["PRETTY_NAME"] = "Generic Linux"
+		}
+	}
+
+	if _, ok := releaseContents["NAME"]; ok {
+		osDistribution.Distribution = releaseContents["NAME"]
+	}
+	if _, ok := releaseContents["ID"]; ok {
+		osDistribution.DistributionID = releaseContents["ID"]
+	}
+	if _, ok := releaseContents["VERSION_ID"]; ok {
+		osDistribution.DistributionVersion = releaseContents["VERSION_ID"]
+	}
+	if _, ok := releaseContents["PRETTY_NAME="]; ok {
+		osDistribution.DistributionPrettyName = releaseContents["PRETTY_NAME="]
+	}
+
+	out, err := exec.Command("uname", "-r").Output()
+	if err != nil {
+		// Could not execute uname -r
+		osDistribution.KernelVersion = "Unknown"
+	} else {
+		rawVersion := string(out)
+		parts := strings.Split(rawVersion, "-")
+		if len(parts) > 0 {
+			osDistribution.KernelVersion = parts[0]
+		} else {
+			osDistribution.KernelVersion = rawVersion
+		}
+	}
+
+	return osDistribution
+}

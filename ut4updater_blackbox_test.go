@@ -43,3 +43,16 @@ func TestGetLatestVersion(t *testing.T) {
 			"003")
 	}
 }
+
+func TestGetOSDistribution(t *testing.T) {
+	osDistribution := updater.GetOSDistribution()
+	if osDistribution.Distribution == "" {
+		t.Error("Distribution must contain something")
+	}
+	if osDistribution.DistributionID == "" {
+		t.Error("DistributionID must contain something")
+	}
+	if osDistribution.KernelVersion == "" {
+		t.Error("KernelVersion must contain something")
+	}
+}

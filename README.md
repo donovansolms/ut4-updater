@@ -21,19 +21,19 @@ This updater aims to make life a bit simpler by only applying files that have be
 
 ### Options
 
-* InstallPath
+* `InstallPath` (required)
 
 InstallPath is the base path for creating new installations. Must be specified. If the path doesn't exist, it will be created.
 
-* `Versioning.Keep` (Defaults to 2)
+* `Versioning.Keep` (Defaults to 2 in the launcher)
 
 Keep specifies the clones to keep. **Warning** if set to 0, the updates will be applied to your current version which could break the game and cause you to download the full game again.
 
-* `Versioning.Run` (Defaults to latest)
+* `Versioning.Run` (Defaults to latest in the launcher)
 
 Run allows you to run any previously downloaded version. This is handy in case something is broken or you need to check performance between versions
 
-* `SendStats` (Defaults to true)
+* `SendStats` (Defaults to true in the launcher)
 
 Basic information is collected to improve the updater and display stats about Unreal Tournament players using Linux
 
