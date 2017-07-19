@@ -53,3 +53,7 @@ I respect your privacy. The updater collects the following information to improv
 
 You can disable Kernel version, distribution and installed Unreal Tournament version collection
 by setting the `SendStats` option to `false`.
+
+## Contact
+
+You can get in contact on Twitter [@donovansolms](https://twitter.com/donovansolms) or by [creating an issue](https://github.com/donovansolms/ut4-updater/issues/new)
