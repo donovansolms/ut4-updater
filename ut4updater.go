@@ -133,6 +133,24 @@ func (updater *UT4Updater) updateVersionMap(versionMapURL string) error {
 	return nil
 }
 
+// getFilelist returns the list of all the files (with full path) in the
+// specified path
+func (updater *UT4Updater) generateHashes(searchPath string) ([]string, error) {
+	/*var fileList []string
+	err := filepath.Walk(
+		searchPath,
+		func(path string, fileInfo os.FileInfo, err error) error {
+			if fileInfo.IsDir() == false {
+				fileList = append(fileList, path)
+			}
+			return nil
+		})
+	return fileList, err
+	*/
+	// TODO: implement hashes
+	return []string{"one"}, nil
+}
+
 // GetLatestVersion returns the latest version installed
 func (updater *UT4Updater) GetLatestVersion() (UT4Version, error) {
 	versions, err := updater.GetVersionList()
