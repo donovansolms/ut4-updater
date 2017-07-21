@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/elauqsap/workerpool"
 	"github.com/google/uuid"
 	"github.com/sethgrid/pester"
 )
@@ -58,7 +59,6 @@ func New(installPath string,
 		updateURL,
 		"update",
 		"ut4-versionmap")
-	fmt.Println(versionMapURL)
 	err = updater.updateVersionMap(versionMapURL)
 	if err != nil {
 		return updater,
@@ -135,8 +135,8 @@ func (updater *UT4Updater) updateVersionMap(versionMapURL string) error {
 
 // getFilelist returns the list of all the files (with full path) in the
 // specified path
-func (updater *UT4Updater) generateHashes(searchPath string) ([]string, error) {
-	/*var fileList []string
+func (updater *UT4Updater) getFilelist(searchPath string) ([]string, error) {
+	var fileList []string
 	err := filepath.Walk(
 		searchPath,
 		func(path string, fileInfo os.FileInfo, err error) error {
@@ -146,9 +146,52 @@ func (updater *UT4Updater) generateHashes(searchPath string) ([]string, error) {
 			return nil
 		})
 	return fileList, err
-	*/
-	// TODO: implement hashes
-	return []string{"one"}, nil
+}
+
+// generateHashes generates SHA256 hashes for the given file list
+// and returns the file list with the file hash
+func (updater *UT4Updater) generateHashes(
+	fileList []string,
+	maxHashers int,
+	feedbackChan chan HashProgressEvent) (map[string]string, error) {
+
+	hashes := make(map[string]string)
+	dispatcher := workerpool.NewDispatcher(maxHashers, 1024)
+	dispatcher.Run()
+	// Add the jobs to the waitgroup
+	dispatcher.WaitGroup.Add(len(fileList))
+	// Queue jobs!
+	for _, filepath := range fileList {
+		dispatcher.JobQueue <- HashJob{filepath: filepath, progress: feedbackChan}
+	}
+
+	//result := 0
+	//fullPercent := 0.00
+	for feedback := range feedbackChan {
+		if feedback.Completed {
+			hashes[feedback.Filepath] = feedback.Hash
+			if len(hashes) == len(fileList) {
+				close(feedbackChan)
+			}
+		}
+		// TODO: Continue with feedback channel
+		/*
+			//fmt.Println(i)
+			if strings.Contains(i, "[COMPLETE]") {
+				result++
+				fullPercent = float64(result) / float64(len(fileList)) * 100
+				fmt.Printf("Completed %d (%.2f)\f", result, fullPercent)
+				fmt.Println(i)
+			}
+
+
+		*/
+
+	}
+	// Block until all the jobs complete
+	dispatcher.WaitGroup.Wait()
+
+	return hashes, nil
 }
 
 // GetLatestVersion returns the latest version installed
@@ -235,7 +278,6 @@ func (updater *UT4Updater) CheckForUpdate() (bool, error) {
 	client.Concurrency = 1
 	client.MaxRetries = 3
 	client.Backoff = pester.DefaultBackoff
-	fmt.Println(fmt.Sprintf("%s/%s/%s", updater.updateURL, "update", "ut4-check"))
 	req, err := http.NewRequest("POST",
 		fmt.Sprintf("%s/%s/%s", updater.updateURL, "update", "ut4-check"),
 		bytes.NewReader(checkJSON))
@@ -257,8 +299,10 @@ func (updater *UT4Updater) CheckForUpdate() (bool, error) {
 // Update creates a backup and the current game, determines the files to be
 // updated, downloads the files and applies the updates. Returns the new latest
 // version.
+// The provided feedback channel will return JSON data with the status
+// updates.
 // This is safe to run in a goroutine.
-func (updater *UT4Updater) Update() (UT4Version, error) {
+func (updater *UT4Updater) Update(feedback chan []byte) (UT4Version, error) {
 
 	// Generate file list with hashes
 	// Generate JSON  file list with hashes

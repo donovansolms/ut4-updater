@@ -16,3 +16,16 @@ type UpdateCheckRequest struct {
 	Versions       []string       `json:"versions"`
 	CurrentVersion string         `json:"current_version"`
 }
+
+// HashProgressPacket contains the progress event
+type HashProgressEvent struct {
+	Filename string
+	Filepath string
+	Error    string
+	// MB/s processed
+	Mbps float64
+	// The estimated time to complete in seconds
+	ETA       float64
+	Completed bool
+	Hash      string
+}

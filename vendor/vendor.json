@@ -3,6 +3,12 @@
 	"ignore": "test",
 	"package": [
 		{
+			"checksumSHA1": "OD08O8XP5WoSacQH4X5Nm23J6Ns=",
+			"path": "github.com/elauqsap/workerpool",
+			"revision": "e2e89cada1f45451793197942f170c485a8331a6",
+			"revisionTime": "2016-06-04T23:10:56Z"
+		},
+		{
 			"checksumSHA1": "THBFSK132njkkKAyDzmQMfXk99Y=",
 			"path": "github.com/google/uuid",
 			"revision": "1c6adf5cd133db09196c44ffae1f77ebf4da64aa",
