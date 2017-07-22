@@ -17,7 +17,7 @@ type UpdateCheckRequest struct {
 	CurrentVersion string         `json:"current_version"`
 }
 
-// HashProgressPacket contains the progress event
+// HashProgressEvent contains the progress event
 type HashProgressEvent struct {
 	Filename string
 	Filepath string
@@ -26,6 +26,7 @@ type HashProgressEvent struct {
 	Mbps float64
 	// The estimated time to complete in seconds
 	ETA       float64
+	Percent   float64
 	Completed bool
 	Hash      string
 }

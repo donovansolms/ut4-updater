@@ -2,6 +2,7 @@ package ut4updater
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -55,16 +56,9 @@ func New(installPath string,
 	}
 	updater.installPath = fullPath
 
-	versionMapURL := fmt.Sprintf("%s/%s/%s",
-		updateURL,
-		"update",
-		"ut4-versionmap")
-	err = updater.updateVersionMap(versionMapURL)
+	err = updater.updateVersionMap()
 	if err != nil {
-		return updater,
-			fmt.Errorf("Unable to update version map '%s': %s",
-				versionMapURL,
-				err.Error())
+		return updater, fmt.Errorf("Unable to update version map: %s", err.Error())
 	}
 
 	// On the first run we generate a UUID for this client
@@ -87,8 +81,12 @@ func New(installPath string,
 
 // updateVersionMap retrieves the version map from the update server
 // and saves a copy locally
-func (updater *UT4Updater) updateVersionMap(versionMapURL string) error {
+func (updater *UT4Updater) updateVersionMap() error {
 
+	versionMapURL := fmt.Sprintf("%s/%s/%s",
+		updater.updateURL,
+		"update",
+		"ut4-versionmap")
 	var mapReader io.ReadCloser
 	response, err := http.Get(versionMapURL)
 	if err != nil {
@@ -148,49 +146,108 @@ func (updater *UT4Updater) getFilelist(searchPath string) ([]string, error) {
 	return fileList, err
 }
 
-// generateHashes generates SHA256 hashes for the given file list
+// getVersionManifest retrieves the filenames and hashes for the
+// specified version from the update server
+func (updater *UT4Updater) getRemoteVersionHashes(
+	version string) (map[string]string, error) {
+
+	url := fmt.Sprintf("%s/%s/%s",
+		updater.updateURL,
+		"update/ut4-hash",
+		version)
+
+	response, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+
+	var versionHashes map[string]string
+	err = json.NewDecoder(response.Body).Decode(&versionHashes)
+	if err != nil {
+		return nil, err
+	}
+	return versionHashes, nil
+}
+
+// calculateHashDeltaOperations calculates the operations to be performed
+func (updater *UT4Updater) calculateHashDeltaOperations(
+	current map[string]string,
+	next map[string]string) map[string]string {
+
+	// This will determine what needs to be done to current
+	// Modified, Removed will be done first,
+	// Added in pass 2
+	delta := make(map[string]string)
+	for file, hash := range current {
+		if nextHash, ok := next[file]; ok {
+			if nextHash != hash {
+				// File has been modified
+				delta[file] = "modified"
+			}
+		} else {
+			// File has been removed
+			delta[file] = "removed"
+		}
+	}
+	for file := range next {
+		if _, ok := current[file]; !ok {
+			delta[file] = "added"
+		}
+	}
+	return delta
+}
+
+// generateDeltaHash generates a SHA256 hash for a map of files
+// and their update operations
+func (updater *UT4Updater) generateDeltaHash(
+	deltaOperations map[string]string) string {
+
+	hasher := sha256.New()
+	keys := make([]string, len(deltaOperations))
+	for key := range deltaOperations {
+		keys = append(keys, key)
+	}
+	// maps are randomised at runtime by go, we need to
+	// order it to ensure the hashes are always the same for
+	// the same operations
+	sort.Strings(keys)
+	for _, key := range keys {
+		hasher.Write([]byte(deltaOperations[key]))
+	}
+	return fmt.Sprintf("%x", hasher.Sum(nil))
+}
+
+// GenerateHashes generates SHA256 hashes for the given file list
 // and returns the file list with the file hash
-func (updater *UT4Updater) generateHashes(
+func (updater *UT4Updater) GenerateHashes(
 	fileList []string,
 	maxHashers int,
-	feedbackChan chan HashProgressEvent) (map[string]string, error) {
+	updateFeedbackChan chan HashProgressEvent) (map[string]string, error) {
 
 	hashes := make(map[string]string)
+	internalFeedbackChan := make(chan HashProgressEvent)
 	dispatcher := workerpool.NewDispatcher(maxHashers, 1024)
 	dispatcher.Run()
 	// Add the jobs to the waitgroup
 	dispatcher.WaitGroup.Add(len(fileList))
 	// Queue jobs!
 	for _, filepath := range fileList {
-		dispatcher.JobQueue <- HashJob{filepath: filepath, progress: feedbackChan}
+		dispatcher.JobQueue <- HashJob{filepath: filepath, progress: internalFeedbackChan}
 	}
 
-	//result := 0
-	//fullPercent := 0.00
-	for feedback := range feedbackChan {
+	for feedback := range internalFeedbackChan {
 		if feedback.Completed {
 			hashes[feedback.Filepath] = feedback.Hash
 			if len(hashes) == len(fileList) {
-				close(feedbackChan)
+				close(internalFeedbackChan)
 			}
 		}
-		// TODO: Continue with feedback channel
-		/*
-			//fmt.Println(i)
-			if strings.Contains(i, "[COMPLETE]") {
-				result++
-				fullPercent = float64(result) / float64(len(fileList)) * 100
-				fmt.Printf("Completed %d (%.2f)\f", result, fullPercent)
-				fmt.Println(i)
-			}
-
-
-		*/
-
+		updateFeedbackChan <- feedback
 	}
 	// Block until all the jobs complete
 	dispatcher.WaitGroup.Wait()
-
+	close(updateFeedbackChan)
 	return hashes, nil
 }
 

@@ -54,12 +54,12 @@ func (job HashJob) Process() {
 		defer wg.Done()
 		_, err := io.Copy(hasher, fileReader)
 		// Send the error back to the progress tracker
-		job.progress <- HashProgressEvent{
+		/*job.progress <- HashProgressEvent{
 			Filename: filename,
 			Filepath: job.filepath,
 			Error:    err.Error(),
-		}
-		return
+		}*/
+		_ = err
 	}()
 
 	bytesHashed := 0
@@ -81,6 +81,7 @@ func (job HashJob) Process() {
 				Filepath: job.filepath,
 				Mbps:     float64(bytesPerSecond) / 1024.00 / 1024.00,
 				ETA:      float64(bytesLeft) / float64(bytesPerSecond),
+				Percent:  float64(bytesHashed) / float64(fileInfo.Size()) * 100.00,
 			}
 			// Reset counters
 			lastProgressReport = time.Now()
@@ -89,8 +90,9 @@ func (job HashJob) Process() {
 	}
 	wg.Wait()
 	job.progress <- HashProgressEvent{
-		Filename: filename,
-		Filepath: job.filepath,
-		Hash:     fmt.Sprintf("%x", hasher.Sum(nil)),
+		Filename:  filename,
+		Filepath:  job.filepath,
+		Completed: true,
+		Hash:      fmt.Sprintf("%x", hasher.Sum(nil)),
 	}
 }

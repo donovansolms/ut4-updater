@@ -3,7 +3,8 @@ package ut4updater
 // ProgressTracker implements a writer for tracking the
 // progress of hash generation and file downloads
 type ProgressTracker struct {
-	progress chan int
+	progress   chan int
+	totalBytes int64
 }
 
 func (pt ProgressTracker) Write(data []byte) (int, error) {
