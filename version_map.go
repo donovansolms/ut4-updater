@@ -4,7 +4,7 @@ import (
 	"time"
 )
 
-// VersionMaps is an decleration for operations on a list of version maps
+// VersionMaps is an declaration for operations on a list of version maps
 type VersionMaps []VersionMap
 
 // VersionMap is the structure for mapping a UT4 build version to

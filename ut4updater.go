@@ -218,6 +218,32 @@ func (updater *UT4Updater) generateDeltaHash(
 	return fmt.Sprintf("%x", hasher.Sum(nil))
 }
 
+// getUpdatePackageURL retrieves the download URL for the given package URL
+func (updater *UT4Updater) getUpdatePackageURL(
+	versionHash string) (string, error) {
+
+	url := fmt.Sprintf("%s/%s/%s",
+		updater.updateURL,
+		"update/ut4-update",
+		versionHash)
+
+	response, err := http.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer response.Body.Close()
+
+	var updateCommand map[string]string
+	err = json.NewDecoder(response.Body).Decode(&updateCommand)
+	if err != nil {
+		return "", err
+	}
+	if _, ok := updateCommand["updateURL"]; !ok {
+		return "", errors.New("Invalid update URL received")
+	}
+	return updateCommand["updateURL"], nil
+}
+
 // GenerateHashes generates SHA256 hashes for the given file list
 // and returns the file list with the file hash
 func (updater *UT4Updater) GenerateHashes(

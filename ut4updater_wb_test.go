@@ -149,3 +149,24 @@ func TestGenerateDeltaHash(t *testing.T) {
 		t.Error("Hash doesn't match input data")
 	}
 }
+
+func TestGetUpdatePackageURL(t *testing.T) {
+	testUpdater, err := New(
+		"./test-resources/installs",
+		2,
+		"latest",
+		true,
+		"http://update.donovansolms.local")
+	if err != nil {
+		panic(err)
+	}
+
+	versionHash := "deb3e700df1e6b29df98c26cc388417072b0bb5eeda3de7d035e186c315f161c"
+	updateURL, err := testUpdater.getUpdatePackageURL(versionHash)
+	if err != nil {
+		t.Error(err.Error())
+	}
+	if updateURL == "" {
+		t.Error("UpdateURL must not be blank")
+	}
+}
