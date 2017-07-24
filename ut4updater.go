@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -238,10 +237,10 @@ func (updater *UT4Updater) getUpdatePackageURL(
 	if err != nil {
 		return "", err
 	}
-	if _, ok := updateCommand["updateURL"]; !ok {
+	if _, ok := updateCommand["update_url"]; !ok {
 		return "", errors.New("Invalid update URL received")
 	}
-	return updateCommand["updateURL"], nil
+	return updateCommand["update_url"], nil
 }
 
 // GenerateHashes generates SHA256 hashes for the given file list
@@ -372,9 +371,10 @@ func (updater *UT4Updater) CheckForUpdate() (bool, error) {
 		return false, err
 	}
 	defer resp.Body.Close()
-	log.Printf("UpdateStatus %s", resp.Status)
-	content, _ := ioutil.ReadAll(resp.Body)
-	fmt.Println(string(content))
+	// TODO: implement
+	//log.Printf("UpdateStatus %s", resp.Status)
+	//content, _ := ioutil.ReadAll(resp.Body)
+	//fmt.Println(string(content))
 
 	return true, nil
 }
