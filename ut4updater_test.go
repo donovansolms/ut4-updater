@@ -90,7 +90,6 @@ func TestUpdateCheck(t *testing.T) {
 }
 
 func TestUpdateVersionMap(t *testing.T) {
-
 	// Test file the remote download and local cache
 	previousPath := updater.installPath
 	previousURL := updater.updateURL
@@ -115,13 +114,12 @@ func TestGetFilelist(t *testing.T) {
 }
 
 func TestGenerateHashes(t *testing.T) {
-
-	list, err := updater.getFilelist("./test-resources")
+	list, err := updater.getFilelist("./test-resources/installs")
 	if err != nil {
 		t.Error(err.Error())
 	}
 	feedbackChan := make(chan HashProgressEvent)
-	go updater.GenerateHashes(list, 2, feedbackChan)
+	go updater.GenerateHashes(list, 1, feedbackChan)
 	completed := 0
 	for feedback := range feedbackChan {
 		if feedback.Completed {

@@ -282,11 +282,9 @@ func (updater *UT4Updater) GetLatestVersion() (UT4Version, error) {
 	if err != nil {
 		return UT4Version{}, err
 	}
-
 	if len(versions) == 0 {
 		return UT4Version{}, errors.New("No Unreal Tournament versions installed")
 	}
-
 	return versions[0], nil
 }
 
@@ -344,7 +342,6 @@ func (updater *UT4Updater) CheckForUpdate() (bool, error) {
 			}
 		}
 	}
-
 	updateCheckRequest := UpdateCheckRequest{
 		ClientID:       updater.clientID,
 		OS:             osDistribution,
@@ -358,7 +355,7 @@ func (updater *UT4Updater) CheckForUpdate() (bool, error) {
 
 	client := pester.New()
 	client.Concurrency = 1
-	client.MaxRetries = 3
+	client.MaxRetries = 1
 	client.Backoff = pester.DefaultBackoff
 	req, err := http.NewRequest("POST",
 		fmt.Sprintf("%s/%s/%s", updater.updateURL, "update", "ut4-check"),
@@ -375,7 +372,6 @@ func (updater *UT4Updater) CheckForUpdate() (bool, error) {
 	//log.Printf("UpdateStatus %s", resp.Status)
 	//content, _ := ioutil.ReadAll(resp.Body)
 	//fmt.Println(string(content))
-
 	return true, nil
 }
 

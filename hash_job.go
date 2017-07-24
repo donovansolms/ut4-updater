@@ -21,10 +21,23 @@ func (job HashJob) Process() {
 	filename := filepath.Base(job.filepath)
 	fileInfo, err := os.Stat(job.filepath)
 	if err != nil {
+
 		job.progress <- HashProgressEvent{
 			Filename: filename,
 			Filepath: job.filepath,
 			Error:    err.Error(),
+		}
+		return
+	}
+	// HACK / TODO: This returns a zero byte hash since copy doesn't report to the
+	// channel because the is nothing to write. I need to do something proper
+	// here
+	if fileInfo.Size() == 0 {
+		job.progress <- HashProgressEvent{
+			Filename:  filename,
+			Filepath:  job.filepath,
+			Completed: true,
+			Hash:      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 		}
 		return
 	}
@@ -36,11 +49,11 @@ func (job HashJob) Process() {
 				Filepath: job.filepath,
 				Error:    err.Error(),
 			}
+			fmt.Println(err.Error())
 			return
 		}
 	}
 	defer file.Close()
-
 	// Set up an internal hash progress tracker
 	hashProgressChan := make(chan int)
 	hasher := sha256.New()
@@ -61,7 +74,6 @@ func (job HashJob) Process() {
 		}*/
 		_ = err
 	}()
-
 	bytesHashed := 0
 	// Report hashing progress once a second
 	progressReportInterval := time.Second
@@ -70,22 +82,25 @@ func (job HashJob) Process() {
 	// time remaining
 	bytesPerSecond := 0
 	bytesLeft := fileInfo.Size()
-	for hashedBytes := range hashProgressChan {
-		bytesLeft -= int64(hashedBytes)
-		bytesHashed += hashedBytes
-		bytesPerSecond += hashedBytes
-		// If enough time has passed, report the progress
-		if time.Since(lastProgressReport) > progressReportInterval {
-			job.progress <- HashProgressEvent{
-				Filename: filename,
-				Filepath: job.filepath,
-				Mbps:     float64(bytesPerSecond) / 1024.00 / 1024.00,
-				ETA:      float64(bytesLeft) / float64(bytesPerSecond),
-				Percent:  float64(bytesHashed) / float64(fileInfo.Size()) * 100.00,
+	// Only reads the channel is there was something to do
+	if bytesLeft > 0 {
+		for hashedBytes := range hashProgressChan {
+			bytesLeft -= int64(hashedBytes)
+			bytesHashed += hashedBytes
+			bytesPerSecond += hashedBytes
+			// If enough time has passed, report the progress
+			if time.Since(lastProgressReport) > progressReportInterval {
+				job.progress <- HashProgressEvent{
+					Filename: filename,
+					Filepath: job.filepath,
+					Mbps:     float64(bytesPerSecond) / 1024.00 / 1024.00,
+					ETA:      float64(bytesLeft) / float64(bytesPerSecond),
+					Percent:  float64(bytesHashed) / float64(fileInfo.Size()) * 100.00,
+				}
+				// Reset counters
+				lastProgressReport = time.Now()
+				bytesPerSecond = 0
 			}
-			// Reset counters
-			lastProgressReport = time.Now()
-			bytesPerSecond = 0
 		}
 	}
 	wg.Wait()
