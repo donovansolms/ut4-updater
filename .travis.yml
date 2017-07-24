@@ -1,4 +1,6 @@
 language: go
+# For now, builds stall on latest trusty
+dist: precise
 go:
   - 1.8
   - tip
