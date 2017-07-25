@@ -6,6 +6,7 @@ An incremental updater for Unreal Tournament 4 on Linux
 [![Go Report Card](https://goreportcard.com/badge/github.com/donovansolms/ut4-updater)](https://goreportcard.com/report/github.com/donovansolms/ut4-updater)
 [![Coverage Status](https://coveralls.io/repos/github/donovansolms/ut4-updater/badge.svg?branch=master)](https://coveralls.io/github/donovansolms/ut4-updater?branch=master)
 [![Current Version](https://img.shields.io/badge/version-development-orange.svg)](https://img.shields.io/badge/version-development-orange.svg)
+[![Godoc Reference](http://godoc.org/github.com/donovansolms/ut4-updater?status.svg)](http://godoc.org/github.com/donovansolms/ut4-updater)
 
 ## About
 
