@@ -16,7 +16,7 @@ fmt:
 	go fmt ./...
 
 test:
-	go test ./... -v -cover
+	go test ./ -v -cover -covermode=count -coverprofile=./coverage.out
 
 clean:
 	rm -Rf ./test-resources/installs/004

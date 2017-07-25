@@ -6,8 +6,10 @@ go:
   - tip
 install:
   - go get github.com/kardianos/govendor
+  - go get github.com/mattn/goveralls
 script:
   - govendor sync
   - make
   - make test
+  - $HOME/gopath/bin/goveralls -coverprofile=./coverage.out -service=travis-ci -repotoken $COVERALLS_TOKEN
   - make clean
