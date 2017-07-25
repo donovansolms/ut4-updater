@@ -17,6 +17,13 @@ type UpdateCheckRequest struct {
 	CurrentVersion string         `json:"current_version"`
 }
 
+// UpdateCheckResponse is the response for update check requests
+type UpdateCheckResponse struct {
+	CurrentVersion  string `json:"current_version"`
+	LatestVersion   string `json:"latest_version"`
+	UpdateAvailable bool   `json:"update_available"`
+}
+
 // HashProgressEvent contains the progress event
 type HashProgressEvent struct {
 	Filename string
@@ -29,4 +36,13 @@ type HashProgressEvent struct {
 	Percent   float64
 	Completed bool
 	Hash      string
+}
+
+// DownloadProgressEvent contains information about an ongoing download
+type DownloadProgressEvent struct {
+	Filename  string
+	Mbps      float64
+	ETA       float64
+	Percent   float64
+	Completed bool
 }

@@ -19,4 +19,6 @@ test:
 	go test ./... -v -cover
 
 clean:
+	rm -Rf ./test-resources/installs/004
+	rm -Rf ./test-resources/test/
 	rm ./bin/*

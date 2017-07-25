@@ -1,10 +1,13 @@
 package ut4updater
 
 import (
+	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -21,12 +24,26 @@ func TestMain(m *testing.M) {
 			}
 			w.Write(versionMap)
 		} else if r.URL.EscapedPath() == "/update/ut4-check" {
-			// TODO: Implement
-			w.WriteHeader(http.StatusOK)
+			response := UpdateCheckResponse{
+				LatestVersion:   "004",
+				UpdateAvailable: true,
+			}
+			err = json.NewEncoder(w).Encode(response)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+			}
 		} else if r.URL.EscapedPath() == "/update/ut4-hash/latest" {
 			w.Write([]byte("{\"Unreal.pak\": \"1234567890oiuytrewq\"}"))
 		} else if r.URL.EscapedPath() == "/update/ut4-update/deb3e700df1e6b29df98c26cc388417072b0bb5eeda3de7d035e186c315f161c" {
-			w.Write([]byte("{\"update_url\": \"https://www.google.com\"}"))
+			w.Write([]byte(fmt.Sprintf("{\"update_url\": \"http://%s/package.tar.gz\"}", r.Host)))
+		} else if r.URL.EscapedPath() == "/package.tar.gz" {
+			packageBytes, err := ioutil.ReadFile("./test-resources/packages/package.tar.gz")
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			w.Header().Add("Content-Type", "application/gzip")
+			w.Write(packageBytes)
 		}
 		//fmt.Println(r.URL.EscapedPath())
 	}))
@@ -80,12 +97,15 @@ func TestGetOSDistribution(t *testing.T) {
 }
 
 func TestUpdateCheck(t *testing.T) {
-	shouldUpdate, err := updater.CheckForUpdate()
+	shouldUpdate, latestVersion, err := updater.CheckForUpdate()
 	if err != nil {
 		t.Error(err.Error())
 	}
 	if shouldUpdate == false {
 		t.Error("UpdateCheck should return true")
+	}
+	if latestVersion == "" {
+		t.Error("UpdateCheck latest version must not be blank")
 	}
 }
 
@@ -178,8 +198,10 @@ func TestGenerateDeltaHash(t *testing.T) {
 	}
 }
 
-func TestGetUpdatePackageURL(t *testing.T) {
-
+// TestGetUpdatePackage tests getting an update, creating the new version
+// and installing the update
+func TestGetUpdatePackage(t *testing.T) {
+	// Get the update package URL
 	versionHash := "deb3e700df1e6b29df98c26cc388417072b0bb5eeda3de7d035e186c315f161c"
 	updateURL, err := updater.getUpdatePackageURL(versionHash)
 	if err != nil {
@@ -187,5 +209,42 @@ func TestGetUpdatePackageURL(t *testing.T) {
 	}
 	if updateURL == "" {
 		t.Error("UpdateURL must not be blank")
+	}
+
+	// Download the update package
+	outputPath := "./test-resources/test"
+	os.RemoveAll(outputPath)
+	err = os.MkdirAll(outputPath, 0755)
+	if err != nil {
+		t.Error(err.Error())
+	}
+	packageFile := filepath.Join(outputPath, "update-package.tar.gz")
+	cancelChan := make(chan bool)
+	feedbackChan := make(chan DownloadProgressEvent)
+	go updater.downloadUpdate(
+		updateURL,
+		packageFile,
+		cancelChan,
+		feedbackChan)
+	for feedback := range feedbackChan {
+		if feedback.Completed {
+			close(feedbackChan)
+		}
+	}
+
+	// Create the new version
+	version := "004"
+	newPath, err := updater.cloneLatestVersionTo(version, true)
+	if err != nil {
+		t.Error(err.Error())
+	}
+	if newPath == "" {
+		t.Errorf("New path for version '%s' must not be blank", version)
+	}
+
+	// Apply the update
+	err = updater.applyUpdate(packageFile, newPath)
+	if err != nil {
+		t.Error(err.Error())
 	}
 }

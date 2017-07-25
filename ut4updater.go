@@ -1,7 +1,10 @@
 package ut4updater
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -15,7 +18,9 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/cavaliercoder/grab"
 	"github.com/elauqsap/workerpool"
 	"github.com/google/uuid"
 	"github.com/sethgrid/pester"
@@ -243,6 +248,163 @@ func (updater *UT4Updater) getUpdatePackageURL(
 	return updateCommand["update_url"], nil
 }
 
+// downloadUpdate downloads the update given by getUpdatePackageURL and
+// returns true if downloaded successfully
+func (updater *UT4Updater) downloadUpdate(
+	packageURL string,
+	savePath string,
+	cancelChan chan bool,
+	feedbackChan chan DownloadProgressEvent) (bool, error) {
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+	defer cancel()
+	client := grab.NewClient()
+	req, err := grab.NewRequest(savePath, packageURL)
+	if err != nil {
+		return false, err
+	}
+	req.WithContext(ctx)
+
+	resp := client.Do(req)
+	if resp.HTTPResponse.StatusCode >= 300 {
+		return false,
+			fmt.Errorf("Received non 2XX status code: %s", resp.HTTPResponse.Status)
+	}
+
+	t := time.NewTicker(time.Second)
+	defer t.Stop()
+
+UpdateLoop:
+	for {
+		select {
+		case <-t.C:
+			// On every tick, send an update
+			feedbackChan <- DownloadProgressEvent{
+				Filename:  resp.Filename,
+				Mbps:      resp.BytesPerSecond() / 1024.00 / 1024.00,
+				ETA:       float64(resp.ETA().Second()),
+				Completed: false,
+				Percent:   resp.Progress() * 100.00,
+			}
+		case <-resp.Done:
+			feedbackChan <- DownloadProgressEvent{
+				Filename:  resp.Filename,
+				Mbps:      resp.BytesPerSecond() / 1024.00 / 1024.00,
+				ETA:       float64(resp.ETA().Second()),
+				Completed: true,
+				Percent:   resp.Progress() * 100.00,
+			}
+			break UpdateLoop
+		case <-cancelChan:
+			cancel()
+			break UpdateLoop
+		}
+	}
+	if err := resp.Err(); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// cloneLatestVersionTo copies the latest version to a new version folder
+// and returns the new base path of the installation
+func (updater *UT4Updater) cloneLatestVersionTo(
+	version string,
+	overwrite bool) (string, error) {
+	newInstallPath, err := updater.GetVersionPath(version, overwrite)
+	if err != nil {
+		err = os.RemoveAll(newInstallPath)
+		if err != nil {
+			// Probably permission error
+			return "", err
+		}
+		err = os.MkdirAll(newInstallPath, 0755)
+		if err != nil {
+			// Probably permission error
+			return "", err
+		}
+	}
+	latestVersion, err := updater.GetLatestVersion()
+	if err != nil {
+		// No installed version?
+		return "", err
+	}
+	err = CopyDir(latestVersion.Path, newInstallPath)
+	if err != nil {
+		return "", err
+	}
+	return newInstallPath, nil
+}
+
+// GetVersionPath returns the path to the version, setting mustNotExist to true
+// will return an error if the path exists
+func (updater *UT4Updater) GetVersionPath(
+	version string, mustNotExist bool) (string, error) {
+	newInstallPath := filepath.Join(updater.installPath, version)
+	fileInfo, err := os.Stat(newInstallPath)
+	if err == nil && fileInfo.IsDir() && mustNotExist {
+		return newInstallPath, fmt.Errorf("The update path '%s' already exists", newInstallPath)
+	}
+	return newInstallPath, nil
+}
+
+// applyUpdate applies the update from packagePAth into installPath
+func (updater *UT4Updater) applyUpdate(packagePath string, installPath string) error {
+	packageFile, err := os.Open(packagePath)
+	if err != nil {
+		return err
+	}
+	defer packageFile.Close()
+	// Start with the gz part of the tar.gz file
+	gzreader, err := gzip.NewReader(packageFile)
+	if err != nil {
+		return err
+	}
+
+	// Go through all files in tar archive
+	tarreader := tar.NewReader(gzreader)
+	for {
+		header, err := tarreader.Next()
+		// No more
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		// get the filename in the archive
+		name := header.Name
+		target := filepath.Join(installPath, name)
+		switch header.Typeflag {
+		case tar.TypeDir:
+			err = os.MkdirAll(target, 0755)
+			if err != nil {
+				return err
+			}
+			fmt.Println("New Dir: ", name)
+			continue
+		case tar.TypeReg:
+			newFile, err := os.OpenFile(
+				target,
+				os.O_CREATE|os.O_RDWR,
+				os.FileMode(header.Mode))
+			if err != nil {
+				return err
+			}
+			defer newFile.Close()
+			// copy over contents
+			if _, err := io.Copy(newFile, tarreader); err != nil {
+				return err
+			}
+			newFile.Close()
+		}
+	}
+
+	// Everything was fine, clean up the downloaded package
+	os.Remove(packagePath)
+	return nil
+}
+
 // GenerateHashes generates SHA256 hashes for the given file list
 // and returns the file list with the file hash
 func (updater *UT4Updater) GenerateHashes(
@@ -306,8 +468,12 @@ func (updater *UT4Updater) GetVersionList() ([]UT4Version, error) {
 	var versions []UT4Version
 	for _, file := range files {
 		if file.IsDir() {
+			versionPath, err := updater.GetVersionPath(file.Name(), false)
+			if err != nil {
+				continue
+			}
 			version := UT4Version{
-				Path: filepath.Join(updater.installPath, file.Name()),
+				Path: versionPath,
 				VersionMap: updater.versionMaps.GetVersionMapByVersionNumber(
 					file.Name()),
 			}
@@ -320,10 +486,10 @@ func (updater *UT4Updater) GetVersionList() ([]UT4Version, error) {
 }
 
 // CheckForUpdate checks if an update is available
-func (updater *UT4Updater) CheckForUpdate() (bool, error) {
+func (updater *UT4Updater) CheckForUpdate() (bool, string, error) {
 	latestVersion, err := updater.GetLatestVersion()
 	if err != nil {
-		return false, err
+		return false, "", err
 	}
 	osDistribution := OSDistribution{
 		Distribution:           "Optout",
@@ -350,7 +516,7 @@ func (updater *UT4Updater) CheckForUpdate() (bool, error) {
 	}
 	checkJSON, err := json.Marshal(updateCheckRequest)
 	if err != nil {
-		return false, err
+		return false, "", err
 	}
 
 	client := pester.New()
@@ -361,18 +527,20 @@ func (updater *UT4Updater) CheckForUpdate() (bool, error) {
 		fmt.Sprintf("%s/%s/%s", updater.updateURL, "update", "ut4-check"),
 		bytes.NewReader(checkJSON))
 	if err != nil {
-		return false, err
+		return false, "", err
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return false, err
+		return false, "", err
 	}
 	defer resp.Body.Close()
-	// TODO: implement
-	//log.Printf("UpdateStatus %s", resp.Status)
-	//content, _ := ioutil.ReadAll(resp.Body)
-	//fmt.Println(string(content))
-	return true, nil
+
+	var response UpdateCheckResponse
+	err = json.NewDecoder(resp.Body).Decode(&response)
+	if err != nil {
+		return false, "", err
+	}
+	return response.UpdateAvailable, response.LatestVersion, nil
 }
 
 // Update creates a backup and the current game, determines the files to be
@@ -401,7 +569,7 @@ func (updater *UT4Updater) GetOSDistribution() OSDistribution {
 
 	// /etc/os-release is the preferred way to check for distribution,
 	// if it exists, we'll use it, otherwise just check for another *-release
-	// file and user a part of it. This isn't critical to the updater.
+	// file and use a part of it. This isn't critical to the updater.
 	hasReleaseFile := true
 	releaseBytes, err := ioutil.ReadFile("/etc/os-release")
 	if err != nil {
@@ -455,8 +623,8 @@ func (updater *UT4Updater) GetOSDistribution() OSDistribution {
 	if _, ok := releaseContents["VERSION_ID"]; ok {
 		osDistribution.DistributionVersion = releaseContents["VERSION_ID"]
 	}
-	if _, ok := releaseContents["PRETTY_NAME="]; ok {
-		osDistribution.DistributionPrettyName = releaseContents["PRETTY_NAME="]
+	if _, ok := releaseContents["PRETTY_NAME"]; ok {
+		osDistribution.DistributionPrettyName = releaseContents["PRETTY_NAME"]
 	}
 
 	out, err := exec.Command("uname", "-r").Output()
